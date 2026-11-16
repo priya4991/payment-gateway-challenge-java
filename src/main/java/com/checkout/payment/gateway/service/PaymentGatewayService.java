@@ -14,6 +14,7 @@ import com.checkout.payment.gateway.model.PostPaymentRequest;
 import com.checkout.payment.gateway.model.PostPaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
 import com.checkout.payment.gateway.validation.PaymentRequestValidator;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -94,7 +95,8 @@ public class PaymentGatewayService {
 
     PostPaymentResponse payment = new PostPaymentResponse();
     payment.setId(UUID.randomUUID());
-    payment.setStatus(bankResponse.isAuthorized() ? PaymentStatus.AUTHORIZED : PaymentStatus.DECLINED);
+    payment.setStatus(Boolean.TRUE.equals(bankResponse.getAuthorized())
+      ? PaymentStatus.AUTHORIZED : PaymentStatus.DECLINED);
     payment.setCardNumberLastFour(lastFour(request.getCardNumber()));
     payment.setExpiryMonth(request.getExpiryMonth());
     payment.setExpiryYear(request.getExpiryYear());
@@ -120,13 +122,18 @@ public class PaymentGatewayService {
   }
 
   private BankPaymentResponse submitToBank(PostPaymentRequest request) {
-    String expiryDate = String.format("%02d/%d", request.getExpiryMonth(), request.getExpiryYear());
+    String expiryDate = String.format(Locale.ROOT, "%02d/%d",
+      request.getExpiryMonth(), request.getExpiryYear());
     BankPaymentRequest bankRequest = new BankPaymentRequest(request.getCardNumber(), expiryDate,
         request.getCurrency(), request.getAmount(), request.getCvv());
     try {
       BankPaymentResponse body = bankClient.submit(bankRequest);
       if (body == null) {
         throw new PaymentProcessingException("Empty response from acquiring bank", null);
+      }
+      if (body.getAuthorized() == null) {
+        throw new PaymentProcessingException(
+            "Acquiring bank response did not include an authorization decision", null);
       }
       return body;
     } catch (RestClientException ex) {

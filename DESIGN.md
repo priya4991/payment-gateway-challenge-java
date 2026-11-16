@@ -27,7 +27,7 @@ in the `message` field, and the bank is not called. Checks:
 - Expiry month: required, 1–12. Expiry year: required, between 1 and 9999. The month/year pair must be in the future.
 - Currency: required and one of the configured supported currencies (`GBP`, `USD`, `EUR`). Input is trimmed
   and uppercased before checking; this is an allow-list, not a general ISO 4217 validator.
-- Amount: required positive integer (minor units).
+- Amount: required positive integer (minor units); fractional JSON numbers are rejected during request binding.
 - CVV: required, 3–4 digits.
 
 ## Bank integration
@@ -37,7 +37,8 @@ in the `message` field, and the bank is not called. Checks:
 - Bank calls use 10-second connect and read timeouts. HTTP error responses and connection failures are surfaced
   as Spring `RestClientException`s and translated to `PaymentProcessingException`.
 - The bank's `authorized` flag maps to `Authorized` or `Declined`.
-- A null/empty bank response is treated as a processing failure.
+- A null/empty bank response or one missing the `authorized` decision is treated as a processing failure;
+  an explicit `authorized: false` is recorded as a decline.
 - If the bank returns an error (for example the simulator's 503 for card numbers ending in 0) or cannot be reached,
   the gateway returns **503** and the payment is not recorded because it has no final status. The idempotency key
   is retained as failed to prevent an unsafe retry with the same key.

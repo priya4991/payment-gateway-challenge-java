@@ -1,6 +1,7 @@
 package com.checkout.payment.gateway.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClientException;
@@ -76,6 +78,30 @@ class PaymentGatewayServiceTest {
     PostPaymentResponse response = processPayment(validRequest("2222405343248882"));
 
     assertEquals(PaymentStatus.DECLINED, response.getStatus());
+    assertEquals(response.getId(), repository.get(response.getId()).orElseThrow().getId());
+  }
+
+  @Test
+  void whenBankResponseOmitsAuthorizationThenProcessingFailsWithoutSavingPayment() {
+    AtomicBoolean paymentSaved = new AtomicBoolean();
+    PaymentsRepository paymentRepository = new PaymentsRepository() {
+      @Override
+      public void add(PostPaymentResponse payment) {
+        paymentSaved.set(true);
+        super.add(payment);
+      }
+    };
+    BankClient client = mock(BankClient.class);
+    when(client.submit(any())).thenReturn(new BankPaymentResponse());
+    PaymentGatewayService serviceWithMockRepository = new PaymentGatewayService(paymentRepository,
+        new PaymentRequestValidator(List.of("GBP", "USD", "EUR"), FIXED_CLOCK), client,
+        new InMemoryIdempotencyStore(), new PaymentRequestFingerprinter());
+
+    assertThrows(PaymentProcessingException.class,
+        () -> serviceWithMockRepository.processPayment(
+            validRequest("2222405343248877"), "missing-auth-key"));
+
+    assertFalse(paymentSaved.get());
   }
 
   @Test

@@ -159,6 +159,17 @@ class PaymentGatewayControllerTest {
   }
 
   @Test
+  void whenAmountIsFractionalThenBadRequestIsReturnedWithoutCallingBank() throws Exception {
+    mvc.perform(MockMvcRequestBuilders.post("/payment")
+            .header("Idempotency-Key", UUID.randomUUID().toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(validPaymentRequest().replace("\"amount\": 100", "\"amount\": 100.9")))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(bankClient);
+  }
+
+  @Test
   void whenExpiryYearIsOutOfRangeThenBadRequestIsReturnedWithoutCallingBank() throws Exception {
     mvc.perform(MockMvcRequestBuilders.post("/payment")
             .header("Idempotency-Key", UUID.randomUUID().toString())

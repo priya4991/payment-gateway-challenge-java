@@ -1,6 +1,7 @@
 package com.checkout.payment.gateway.client;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -32,7 +33,25 @@ class BankClientTest {
 
     BankPaymentResponse response = bankClient.submit(request);
 
-    assertTrue(response.isAuthorized());
+    assertEquals(Boolean.TRUE, response.getAuthorized());
+    server.verify();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"{}", "{\"authorized\":null}"})
+  void whenBankResponseOmitsAuthorizationThenNullIsPreserved(String responseBody) {
+    RestTemplate restTemplate = new RestTemplate();
+    MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+    server.expect(requestTo("http://localhost:8080/payments"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+    BankClient bankClient = new RestTemplateBankClient(restTemplate, "http://localhost:8080");
+    BankPaymentRequest request = new BankPaymentRequest(
+        "2222405343248877", "12/2099", "GBP", 100, "123");
+
+    BankPaymentResponse response = bankClient.submit(request);
+
+    assertNull(response.getAuthorized());
     server.verify();
   }
 }
