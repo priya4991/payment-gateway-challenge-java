@@ -164,7 +164,8 @@ class PaymentGatewayControllerTest {
             .header("Idempotency-Key", UUID.randomUUID().toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(validPaymentRequest().replace("\"amount\": 100", "\"amount\": 100.9")))
-        .andExpect(status().isBadRequest());
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.message").value("amount must be a whole number"));
 
     verifyNoInteractions(bankClient);
   }

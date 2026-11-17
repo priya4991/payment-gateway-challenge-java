@@ -17,8 +17,9 @@ The HTML coverage report is written to `build/reports/jacoco/test/html/index.htm
 
 The POST JSON body fields are `card_number`, `expiry_month`, `expiry_year`, `currency`, `amount`, and `cvv`.
 Responses for validation errors use **400**, idempotency conflicts use **409**, and bank processing failures
-use **503**. Missing request bodies/headers and malformed JSON are rejected by Spring with **400**; those
-framework-level errors do not currently use the application's `ErrorResponse` format.
+use **503**. Malformed JSON and fields with incorrect JSON types return **400** with a safe `ErrorResponse`;
+fractional values for `amount` specifically report that the amount must be a whole number. Missing required
+headers are rejected by Spring with **400**.
 
 ## Validation and rejection
 The request is validated before any bank call. Validation failures return **400** with all violations listed
