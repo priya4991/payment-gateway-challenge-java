@@ -2,7 +2,6 @@ package com.checkout.payment.gateway.idempotency;
 
 import com.checkout.payment.gateway.model.PostPaymentResponse;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 
 /** Process-local implementation; replace with a durable store for multi-instance deployments. */
@@ -19,16 +18,11 @@ public class InMemoryIdempotencyStore implements IdempotencyStore {
 
   @Override
   public Claim claim(String key, String requestFingerprint) {
-    AtomicReference<Claim> claim = new AtomicReference<>();
-    entries.compute(key, (ignored, current) -> {
-      if (current == null) {
-        claim.set(new Claim(Status.NEW, null));
-        return new Entry(requestFingerprint, Status.IN_PROGRESS, null);
-      }
-      claim.set(resolveClaim(current, requestFingerprint));
-      return current;
-    });
-    return claim.get();
+    Entry newEntry = new Entry(requestFingerprint, Status.IN_PROGRESS, null);
+    Entry existing = entries.putIfAbsent(key, newEntry);
+    return existing == null
+        ? new Claim(Status.NEW, null)
+        : resolveClaim(existing, requestFingerprint);
   }
 
   private static Claim resolveClaim(Entry entry, String requestFingerprint) {

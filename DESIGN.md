@@ -54,8 +54,10 @@ in the `message` field, and the bank is not called. Checks:
   requests still contend through the atomic claim operation.
 - A failed bank attempt retains the key in a failed state. Retrying that key returns **503** without another bank
   submission; a new attempt needs a new key.
-- Request matching uses a null-safe, length-prefixed HMAC fingerprint, not a saved copy of the request. The HMAC
-  secret is generated at process startup, and raw card data/CVV are not stored in idempotency records.
+- Request matching uses a null-safe, length-prefixed HMAC fingerprint of the card number, expiry, currency, and
+  amount, not a saved copy of the request. CVV is deliberately excluded because it is sensitive authentication
+  data and must not be retained, including in derived fingerprints. The HMAC secret is generated at process
+  startup; raw card data and CVV are not stored in idempotency records.
 - `InMemoryIdempotencyStore` is process-local and unbounded: state is lost on restart, is not shared across
   instances, and has no expiry policy. It is for this exercise, not production. Production should use durable,
   shared storage with atomic uniqueness and a retention policy.
@@ -81,7 +83,7 @@ in the `message` field, and the bank is not called. Checks:
   and malformed fields, non-positive amounts, expiry boundaries with a fixed clock, idempotency replay after
   expiry, validation failures without key claims, normalized key boundaries, concurrent duplicate submissions,
   and bank failures.
-- `PaymentRequestFingerprinterTest` covers null/missing fields and delimiter-safe canonical fingerprints.
+- `PaymentRequestFingerprinterTest` covers null/missing fields, delimiter-safe canonical fingerprints, and CVV exclusion.
 - `PaymentGatewayControllerTest` covers GET success/not-found and POST success, request-body failures, required
   idempotency headers, duplicate/conflicting keys, validation errors, bank failures, and card-data redaction.
 - `BankClientTest` verifies the RestTemplate adapter sends a POST to the bank's `/payments` endpoint and parses

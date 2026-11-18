@@ -35,7 +35,6 @@ public class PaymentRequestFingerprinter {
       appendField(canonicalRequest, request.getCurrency());
       appendField(canonicalRequest,
           request.getAmount() == null ? null : request.getAmount().toString());
-      appendField(canonicalRequest, request.getCvv());
     }
     try {
       Mac mac = Mac.getInstance("HmacSHA256");
