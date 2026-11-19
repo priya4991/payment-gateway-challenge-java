@@ -1,8 +1,9 @@
 # Payment Gateway – Design Notes
 
 ## Running
-1. Start the bank simulator: `docker-compose up` (or `docker compose up`).
-2. Start the gateway: `./gradlew bootRun` (listens on port 8090).
+1. Start the gateway and bank simulator together: `docker compose up --build` (gateway listens on port 8090).
+2. Alternatively, start only the simulator with `docker compose up bank_simulator` and run the gateway with
+  `./gradlew bootRun`.
 3. Run tests: `./gradlew test`.
 4. Generate coverage reports: `./gradlew jacocoTestReport`.
 
@@ -101,7 +102,7 @@ The following are limitations of this exercise implementation, not capabilities 
 | The gateway makes a synchronous `RestTemplate` call to the acquiring bank with 10-second connect/read timeouts. | A slow bank occupies request threads. A timeout does not prove whether the bank processed the payment; the current code conservatively fails the idempotency key and does not automatically retry, but cannot resolve an ambiguous outcome. | First use the bank's idempotency support if available; otherwise add a reconciliation process and explicit handling for unknown outcomes. Keep bounded timeouts and do not blindly retry payment submissions. |
 | PAN and CVV are not persisted by the gateway, but are present transiently in the incoming request and outbound bank request. The configured simulator URL is plain HTTP on localhost. No API authentication, TLS termination, or rate limiting is configured in this application. | A production deployment exposed beyond a trusted local environment needs controls for protecting cardholder data and preventing unauthorized or abusive access. | Apply the relevant PCI/security requirements: terminate TLS at a controlled ingress/API gateway, authenticate and authorize merchants, restrict network paths, use tokenization where supported, minimize retention, manage secrets outside source/config maps, and ensure logs never include PAN, CVV, or raw request bodies. |
 | Logging consists of payment ID/status messages and exception stack traces in the controller advice. There are no application metrics, tracing, health endpoints, or alert rules configured. | Operators cannot readily quantify outcomes, localize latency, correlate a request across components, or detect saturation and degradation. Error causes may include downstream diagnostics and must be reviewed before production logging. | Add the observability controls described below, with sensitive-data filtering and bounded metric dimensions. |
-| The repository has no gateway Dockerfile or Kubernetes resources; `docker-compose.yml` runs only the bank simulator. | There is no packaged gateway image, deployment strategy, health probing, or orchestration configuration in this repository. | Containerize and deploy using the proposed Kubernetes approach below; those artifacts are future work, not implemented here. |
+| The repository now has a Dockerfile and `docker-compose.yml` can run the gateway with the simulator for local use, but there are no Kubernetes resources or production image-release configuration. | Local container execution does not provide production deployment, health probing, scaling, rollout, or operational controls. | Use the proposed Kubernetes approach below for a production deployment; cluster manifests/charts and release automation remain future work. |
 
 The current synchronous Spring MVC service and a relational database are a reasonable first production architecture. An asynchronous workflow or broker is not required by the current traffic model; introduce one only if measured throughput, isolation, or workflow requirements justify its operational cost.
 
@@ -128,7 +129,7 @@ Keep labels low-cardinality: do not use payment IDs, idempotency keys, card data
 
 ## Proposed Kubernetes deployment and operation
 
-No gateway container image, Kubernetes Deployment/Service, Ingress, probe endpoints, or cluster configuration is included in this repository. The following is a proposed deployment approach, not an implemented feature.
+The repository includes a Dockerfile and a Compose service for local container execution, but no Kubernetes Deployment/Service, Ingress, probe endpoints, or cluster configuration. The following is a proposed Kubernetes deployment approach, not an implemented feature.
 
 - Package the Spring Boot application as a container image. Run it behind a Kubernetes `Service`, with an `Ingress` or API gateway handling external routing and TLS. Apply authentication and authorization at the appropriate gateway/application boundary.
 - Put non-sensitive settings such as port and supported currencies in a `ConfigMap`. Put credentials and cryptographic configuration in Kubernetes `Secrets` or, preferably for production, an external secrets manager with rotation and access controls. Do not place secrets in an image, source control, or ConfigMap.
@@ -151,7 +152,7 @@ No gateway container image, Kubernetes Deployment/Service, Ingress, probe endpoi
 
 1. **Durable shared state:** replace the in-memory payment and idempotency maps with a relational database; define atomic claims, retention, migrations, backup, and recovery behavior. This is a prerequisite for safe horizontal scaling.
 2. **Resolve ambiguous bank outcomes:** use acquiring-bank idempotency where supported; otherwise design reconciliation and an explicit unknown/pending outcome rather than assuming a timeout means failure. Do not add blind retries.
-3. **Containerize and deploy:** create a gateway image and Kubernetes Deployment/Service/Ingress with probes, resource sizing, graceful shutdown, rollout/rollback, and disruption policy. Keep a single replica until state is shared and idempotency is safe across instances.
+3. **Deploy on Kubernetes:** add Kubernetes Deployment/Service/Ingress resources for the existing gateway image, with probes, resource sizing, graceful shutdown, rollout/rollback, and disruption policy. Keep a single replica until state is shared and idempotency is safe across instances.
 4. **Add observability and security controls:** instrument metrics, structured redacted logs, traces, alerts, authentication, TLS, and secret management; verify applicable payment-card data controls.
 5. **Load test and tune:** measure end-to-end latency and throughput, then tune thread pools, HTTP/database connection pools, concurrency limits, resource requests, and HPA thresholds. Introduce asynchronous processing or additional infrastructure only if measurements and product requirements warrant it.
 
